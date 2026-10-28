@@ -5,7 +5,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# pip is only needed to install: removing it drops its vendored dependencies (and their CVEs).
+RUN pip install --no-cache-dir -r requirements.txt \
+ && pip uninstall -y pip
 
 COPY worker.py .
 
