@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Orders Platform</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    form { display: flex; gap: .5rem; margin-bottom: 1.5rem; }
+    input { padding: .4rem; }
+    input[name=item] { flex: 1; }
+    button { padding: .4rem 1rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: .4rem; border-bottom: 1px solid #ddd; }
+    .pending { color: #b26a00; } .processing { color: #0057b8; } .completed { color: #1a7f37; }
+    #error { color: #c00; }
+  </style>
+</head>
+<body>
+  <h1>Orders Platform</h1>
+  <form id="order-form">
+    <input name="item" placeholder="Item" required maxlength="100">
+    <input name="quantity" type="number" min="1" max="1000" value="1" required>
+    <button type="submit">Order</button>
+  </form>
+  <p id="error"></p>
+  <table>
+    <thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Status</th><th>Created</th></tr></thead>
+    <tbody id="orders"></tbody>
+  </table>
+
+  <script>
+    const tbody = document.getElementById("orders");
+    const errorEl = document.getElementById("error");
+
+    async function refresh() {
+      try {
+        const res = await fetch("/api/orders");
+        if (!res.ok) throw new Error(`API ${res.status}`);
+        const orders = await res.json();
+        tbody.replaceChildren(...orders.map((o) => {
+          const tr = document.createElement("tr");
+          for (const value of [o.id, o.item, o.quantity, o.status, new Date(o.created_at).toLocaleTimeString()]) {
+            const td = document.createElement("td");
+            td.textContent = value;
+            tr.append(td);
+          }
+          tr.children[3].className = o.status;
+          return tr;
+        }));
+        errorEl.textContent = "";
+      } catch (err) {
+        errorEl.textContent = `Cannot load orders: ${err.message}`;
+      }
+    }
+
+    document.getElementById("order-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.target;
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item: form.item.value, quantity: Number(form.quantity.value) }),
+      });
+      if (!res.ok) {
+        errorEl.textContent = (await res.json()).error;
+        return;
+      }
+      form.item.value = "";
+      refresh();
+    });
+
+    refresh();
+    setInterval(refresh, 2000);
+  </script>
+</body>
+</html>

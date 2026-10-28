@@ -1,0 +1,69 @@
+# orders-platform v0 — local stack.
+# Credentials below are local-only defaults; override them with a .env file.
+name: orders-platform
+
+x-app-env: &app-env
+  DATABASE_URL: postgres://${POSTGRES_USER:-orders}:${POSTGRES_PASSWORD:-orders}@postgres:5432/${POSTGRES_DB:-orders}
+  REDIS_URL: redis://redis:6379
+  ORDERS_STREAM: orders
+
+services:
+  front:
+    build: ./front
+    ports:
+      - "8080:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  api:
+    build: ./api
+    environment:
+      <<: *app-env
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  worker:
+    build: ./worker
+    environment:
+      <<: *app-env
+      PROCESSING_SECONDS: "2"
+    depends_on:
+      api:
+        condition: service_healthy  # the API creates the schema
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-orders}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orders}
+      POSTGRES_DB: ${POSTGRES_DB:-orders}
+    volumes:
+      - pgdata:/var/lib/postgresql  # Postgres 18+ layout
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
